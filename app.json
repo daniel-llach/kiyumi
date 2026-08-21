@@ -37,7 +37,8 @@
           "imageWidth": 1,
           "backgroundColor": "#A2D7C5"
         }
-      ]
+      ],
+      "expo-video"
     ]
   }
 }
