@@ -3,41 +3,36 @@ import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { Canvas, Fill, Group, ImageShader, Shader, useImage } from '@shopify/react-native-skia';
 import { useAudioPlayer } from 'expo-audio';
 import { chromaKeySource } from '../shaders/chromaKey';
-
-const kiyumiSpriteSheet = require('../../assets/sprites/kiyumi-intro-spritesheet.webp');
-const kiyumiAudioSource = require('../../assets/audio/kiyumi-intro.m4a');
-
-const SHEET_COLS = 9;
-const SHEET_ROWS = 8;
-const FRAME_COUNT = 72;
-const FRAME_W = 480;
-const FRAME_H = 854;
-const SHEET_W = SHEET_COLS * FRAME_W;
-const SHEET_H = SHEET_ROWS * FRAME_H;
-const FPS = 12;
-const CLIP_DURATION = FRAME_COUNT / FPS;
+import type { KiyumiClip } from '../clips/kiyumiClips';
 
 type Props = {
-  source?: string | number;
+  clip: KiyumiClip;
   threshold?: number;
   smoothing?: number;
   spillSuppression?: number;
 };
 
 export function KiyumiVideo({
+  clip,
   threshold = 0.06,
   smoothing = 0.12,
   spillSuppression = 0.6,
 }: Props) {
-  const spriteSheet = useImage(kiyumiSpriteSheet);
+  const { spriteSheet: spriteSheetSource, audio, frameW, frameH, cols, rows, frameCount, fps } =
+    clip.android;
+  const sheetW = cols * frameW;
+  const sheetH = rows * frameH;
+  const clipDuration = frameCount / fps;
+
+  const spriteSheet = useImage(spriteSheetSource);
   const [size, setSize] = React.useState({ width: 0, height: 0 });
   const [frameIndex, setFrameIndex] = React.useState(0);
 
-  const audioPlayer = useAudioPlayer(kiyumiAudioSource);
+  const audioPlayer = useAudioPlayer(audio);
   const audioStarted = React.useRef(false);
 
   React.useEffect(() => {
-    audioPlayer.loop = true;
+    audioPlayer.loop = clip.loop;
     audioPlayer.volume = 1;
     return () => {
       try {
@@ -47,7 +42,7 @@ export function KiyumiVideo({
       }
       audioStarted.current = false;
     };
-  }, [audioPlayer]);
+  }, [audioPlayer, clip.loop]);
 
   React.useEffect(() => {
     if (!audioStarted.current) {
@@ -56,25 +51,28 @@ export function KiyumiVideo({
       audioPlayer.play();
     }
     const interval = setInterval(() => {
-      const t = audioPlayer.currentTime % CLIP_DURATION;
-      const nextFrame = Math.floor(t * FPS) % FRAME_COUNT;
+      const t = clip.loop ? audioPlayer.currentTime % clipDuration : audioPlayer.currentTime;
+      const nextFrame = Math.min(Math.floor(t * fps), frameCount - 1);
       setFrameIndex(nextFrame);
+      if (!clip.loop && t >= clipDuration) {
+        clearInterval(interval);
+      }
     }, 1000 / 30);
     return () => clearInterval(interval);
-  }, [audioPlayer]);
+  }, [audioPlayer, clip.loop, clipDuration, fps, frameCount]);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     setSize({ width, height });
   };
 
-  const scale = Math.min(size.width / FRAME_W, size.height / FRAME_H) || 0;
-  const dispFrameW = FRAME_W * scale;
-  const dispFrameH = FRAME_H * scale;
+  const scale = Math.min(size.width / frameW, size.height / frameH) || 0;
+  const dispFrameW = frameW * scale;
+  const dispFrameH = frameH * scale;
   const offsetX = (size.width - dispFrameW) / 2;
-  const offsetY = (size.height - dispFrameH) / 2;
-  const col = frameIndex % SHEET_COLS;
-  const row = Math.floor(frameIndex / SHEET_COLS);
+  const offsetY = size.height - dispFrameH;
+  const col = frameIndex % cols;
+  const row = Math.floor(frameIndex / cols);
 
   return (
     <View style={styles.container} onLayout={onLayout}>
@@ -92,8 +90,8 @@ export function KiyumiVideo({
                   rect={{
                     x: offsetX - col * dispFrameW,
                     y: offsetY - row * dispFrameH,
-                    width: SHEET_W * scale,
-                    height: SHEET_H * scale,
+                    width: sheetW * scale,
+                    height: sheetH * scale,
                   }}
                 />
               </Shader>

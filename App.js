@@ -1,6 +1,6 @@
 import React from 'react';
 import { SplashScreen } from './src/screens/SplashScreen';
-import { ChromaKeyTest } from './src/screens/ChromaKeyTest';
+import { Welcome } from './src/screens/Welcome';
 
 const SPLASH_DURATION_MS = 1800;
 
@@ -16,5 +16,5 @@ export default function App() {
     return <SplashScreen />;
   }
 
-  return <ChromaKeyTest />;
+  return <Welcome />;
 }

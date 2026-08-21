@@ -4,33 +4,34 @@ import { Canvas, Fill, ImageShader, Shader, useVideo } from '@shopify/react-nati
 import { useSharedValue } from 'react-native-reanimated';
 import { useAudioPlayer } from 'expo-audio';
 import { chromaKeySource } from '../shaders/chromaKey';
+import type { KiyumiClip } from '../clips/kiyumiClips';
 
-const kiyumiAudioSource = require('../../assets/audio/kiyumi-intro.m4a');
+const VIDEO_W = 480;
+const VIDEO_H = 854;
 
 type Props = {
-  source: string | number;
+  clip: KiyumiClip;
   threshold?: number;
   smoothing?: number;
   spillSuppression?: number;
 };
 
 export function KiyumiVideo({
-  source,
+  clip,
   threshold = 0.06,
   smoothing = 0.12,
   spillSuppression = 0.6,
 }: Props) {
   const paused = useSharedValue(false);
-  const videoUri =
-    typeof source === 'number' ? Image.resolveAssetSource(source).uri : source;
-  const { currentFrame } = useVideo(videoUri, { paused, looping: true });
+  const videoUri = Image.resolveAssetSource(clip.ios.video).uri;
+  const { currentFrame } = useVideo(videoUri, { paused, looping: clip.loop });
   const [size, setSize] = React.useState({ width: 0, height: 0 });
 
-  const audioPlayer = useAudioPlayer(kiyumiAudioSource);
+  const audioPlayer = useAudioPlayer(clip.ios.audio);
   const audioStarted = React.useRef(false);
 
   React.useEffect(() => {
-    audioPlayer.loop = true;
+    audioPlayer.loop = clip.loop;
     audioPlayer.volume = 1;
     return () => {
       try {
@@ -40,7 +41,7 @@ export function KiyumiVideo({
       }
       audioStarted.current = false;
     };
-  }, [audioPlayer]);
+  }, [audioPlayer, clip.loop]);
 
   if (currentFrame && !audioStarted.current) {
     audioStarted.current = true;
@@ -53,6 +54,19 @@ export function KiyumiVideo({
     setSize({ width, height });
   };
 
+  let rect = { x: 0, y: 0, width: size.width, height: size.height };
+  if (size.width > 0) {
+    const scale = Math.min(size.width / VIDEO_W, size.height / VIDEO_H);
+    const dispW = VIDEO_W * scale;
+    const dispH = VIDEO_H * scale;
+    rect = {
+      x: (size.width - dispW) / 2,
+      y: size.height - dispH,
+      width: dispW,
+      height: dispH,
+    };
+  }
+
   return (
     <View style={styles.container} onLayout={onLayout}>
       {size.width > 0 && (
@@ -62,11 +76,7 @@ export function KiyumiVideo({
               source={chromaKeySource}
               uniforms={{ threshold, smoothing, spillSuppression }}
             >
-              <ImageShader
-                image={currentFrame}
-                fit="contain"
-                rect={{ x: 0, y: 0, width: size.width, height: size.height }}
-              />
+              <ImageShader image={currentFrame} fit="fill" rect={rect} />
             </Shader>
           </Fill>
         </Canvas>
